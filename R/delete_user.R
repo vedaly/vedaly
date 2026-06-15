@@ -35,6 +35,13 @@ delete_user <- function() {
   
   content <- httr::content(response)
   
+  message("")
+  message("content:")
+  print(class(content))
+  message("")
+  print(content)
+  message("")
+  
   if (!content$success) {
     stop(content$message)
   }
