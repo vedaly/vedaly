@@ -17,7 +17,6 @@ delete_user <- function() {
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
 
-
   response <- httr::POST(
     url = endpoint,
     encode = "json",
@@ -33,19 +32,16 @@ delete_user <- function() {
     stop("Deleting user failed: ", msg)
   }
   
-  content <- httr::content(response)
+  # content <- httr::content(response)
   
-  message("")
-  message("content:")
-  print(class(content))
-  message("")
-  print(content)
-  message("")
+  content <- jsonlite::fromJSON(httr::content(response))
   
-  if (!content$success) {
-    stop(content$message)
-  }
-  
-  message(content$message)
-
+  if (content$success) {
+    message(content$message)
+  } else {
+    if (!content$success) {
+      stop(content$message)
+    }
+  } 
+ 
 }
