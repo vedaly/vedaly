@@ -32,8 +32,6 @@ delete_user <- function() {
     stop("Deleting user failed: ", msg)
   }
   
-  # content <- httr::content(response)
-  
   content <- jsonlite::fromJSON(httr::content(response))
   
   if (content$success) {
@@ -42,6 +40,5 @@ delete_user <- function() {
     if (!content$success) {
       stop(content$message)
     }
-  } 
- 
+  }
 }
