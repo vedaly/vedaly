@@ -28,7 +28,7 @@ delete_user <- function() {
     }
   "
 
-  response <- httr::POST(
+  response_companyId <- httr::POST(
     url = gql_api_url,
     encode = "json",
     body = list(
@@ -41,9 +41,9 @@ delete_user <- function() {
     )
   )
 
-  result <- httr::content(response, as = "parsed", encoding = "UTF-8")
+  result_companyId <- httr::content(response_companyId, as = "parsed", encoding = "UTF-8")
   
-  company_id <- result$data$preon_op$users[[1]]$company_id
+  company_id <- result_companyId$data$preon_op$users[[1]]$company_id
   company_id_asList = list(company_id = company_id)
   
   # determing the users (their email addresses) with the company id companyId
@@ -57,7 +57,7 @@ delete_user <- function() {
     }
   "
   
-  response_2 <- httr::POST(
+  response_emails <- httr::POST(
     url = gql_api_url,
     encode = "json",
     body = list(
@@ -70,9 +70,54 @@ delete_user <- function() {
     )
   )
   
-  result_2 <- httr::content(response_2, as = "parsed", encoding = "UTF-8")
+  result_emails <- httr::content(response_emails, as = "parsed", encoding = "UTF-8")
   
-  company_emails <- lapply(result_2$data$preon_op$users, function(x) x$email)
+  company_emails <- lapply(result_emails$data$preon_op$users, function(x) x$email)
+  
+  #---
+  
+  # get the company_roles of the user with the email address 'email'
+  get_user_companyRoles_query <- "
+   query myQuery($email: String!) {
+      preon_op {
+        users(where: {email: {_eq: $email}}) {
+          company_roles
+        }
+      }
+    }
+  "
+  
+  response_companyRoles <- httr::POST(
+    url = gql_api_url,
+    encode = "json",
+    body = list(
+      query = get_user_companyRoles_query,
+      variables = email_asList
+    ),
+    httr::add_headers(
+      Authorization = paste("Bearer", auth_config$id_token),
+      `Content-Type` = "application/json"
+    )
+  )
+  
+  result_companyRoles <- httr::content(response_companyRoles, as = "parsed", encoding = "UTF-8")
+  
+  company_roles <- result_companyRoles$data$preon_op$users[[1]]$company_roles
+  
+  company_roles <- list("user", "admini")
+  
+  hasAdminRole <- any(sapply(company_roles, function(x) x == "admin"))
+  
+  if (hasAdminRole == FALSE) {
+    message("You don't have the persmission to delete user accounts.")
+    message("Please contact admin in your organization.")
+    stop("Deletion of user account(s) has been interrupted.")
+  }
+  
+  #---
+  
+  # determing now the counts of user email addresses belonging to the company
+  # without ai
   
   company_emails_withoutAIUser <- company_emails[
     !grepl("-ai@", unlist(company_emails))
@@ -108,7 +153,7 @@ delete_user <- function() {
     }
   }
   
-  ## start to delete user account with email addess 'email'
+  #--- start to delete user account with email address 'email'
   
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
