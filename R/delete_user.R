@@ -28,7 +28,7 @@ delete_user <- function() {
     }
   "
 
-  response <- httr::POST(
+  response_companyId <- httr::POST(
     url = gql_api_url,
     encode = "json",
     body = list(
@@ -41,9 +41,9 @@ delete_user <- function() {
     )
   )
 
-  result <- httr::content(response, as = "parsed", encoding = "UTF-8")
+  result_companyId <- httr::content(response_companyId, as = "parsed", encoding = "UTF-8")
   
-  company_id <- result$data$preon_op$users[[1]]$company_id
+  company_id <- result_companyId$data$preon_op$users[[1]]$company_id
   company_id_asList = list(company_id = company_id)
   
   # determing the users (their email addresses) with the company id companyId
@@ -57,7 +57,7 @@ delete_user <- function() {
     }
   "
   
-  response_2 <- httr::POST(
+  response_emails <- httr::POST(
     url = gql_api_url,
     encode = "json",
     body = list(
@@ -70,9 +70,12 @@ delete_user <- function() {
     )
   )
   
-  result_2 <- httr::content(response_2, as = "parsed", encoding = "UTF-8")
+  result_emails <- httr::content(response_emails, as = "parsed", encoding = "UTF-8")
   
-  company_emails <- lapply(result_2$data$preon_op$users, function(x) x$email)
+  company_emails <- lapply(result_emails$data$preon_op$users, function(x) x$email)
+
+  # determing now the counts of user email addresses belonging to the company
+  # without ai user
   
   company_emails_withoutAIUser <- company_emails[
     !grepl("-ai@", unlist(company_emails))
