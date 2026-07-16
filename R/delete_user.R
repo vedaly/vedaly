@@ -111,7 +111,7 @@ delete_user <- function() {
     }
   }
   
-  ## start to delete user account with email addess 'email'
+  #--- start to delete user account with email address 'email'
   
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
