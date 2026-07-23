@@ -10,6 +10,13 @@
 #' @export
 delete_user <- function() {
 
+  # csv file with header and user accounts/emails to
+  # be delete (only emails belonging to the company
+  # of the current admin can be delete)
+  fileWithEmails_toBedeleted = "/home/shenz/vedaly/accounts/emailAdressAcounts_toBeDeleted.csv"
+  
+  possible_emails_acountsToBeDeleted_list <- as.list(read.delim(fileWithEmails_toBedeleted, header=TRUE, sep=",")[[1]])
+  
   gql_api_url = "https://graphql-dev.omicschart.com/v1/graphql"
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
@@ -116,15 +123,21 @@ delete_user <- function() {
   
   # determing now the counts of user email addresses belonging to the company
   # without ai
-  
   company_emails_withoutAIUser <- company_emails[
     !grepl("-ai@", unlist(company_emails))
   ]
   
+  emailAccounts_toBeDeleted <- intersect(unlist(possible_emails_acountsToBeDeleted_list), unlist(company_emails_withoutAIUser))
+  
+
+  
+  # is current user email (with admin role) also availabel in emailAccounts_toBeDeleted
+  currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted
+  
   users_count = length(company_emails_withoutAIUser)
   
   # if users_count == 1: only 1 (real) user belong to the company
-  if (users_count == 1) {
+  if (users_count == 1 && currentAdminAccount_inAccounts_toBeDeleted) {
     message("You're the only user of your company.")
     message("If you continue not only your user data, but")
     message("all data of your company will be deleted")
@@ -156,10 +169,19 @@ delete_user <- function() {
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
 
+  # response <- httr::POST(
+  #   url = endpoint,
+  #   encode = "json",
+  #   body = list(email = email, emailAccounts_toBeDeleted = emailAccounts_toBeDeleted, users_count = users_count, company_id = company_id)
+  # )
+  # 
+  #  For security reasons, i.e., prevent company_id source code manipulation on client side:
+  #  the admin company_id and for each email account the company_id will be determined on the backend
+  #  => Only if they are identical the user email account will be deleted on the backend
   response <- httr::POST(
     url = endpoint,
     encode = "json",
-    body = list(email = email, users_count = users_count, company_id = company_id)
+    body = list(email = email, emailAccounts_toBeDeleted = emailAccounts_toBeDeleted, users_count = users_count)
   )
   
   if (httr::http_error(response)) {
