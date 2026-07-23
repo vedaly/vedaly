@@ -104,8 +104,6 @@ delete_user <- function() {
   
   company_roles <- result_companyRoles$data$preon_op$users[[1]]$company_roles
   
-  company_roles <- list("user", "admini")
-  
   hasAdminRole <- any(sapply(company_roles, function(x) x == "admin"))
   
   if (hasAdminRole == FALSE) {
