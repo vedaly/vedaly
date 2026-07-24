@@ -24,7 +24,7 @@ delete_user <- function() {
   # current user email address
   email <- auth_config$email
   email_asList <- list(email = email)
-  
+
   # get the company id of the current user
   get_user_companyId_query <- "
     query myQuery($email: String!) {
@@ -130,6 +130,34 @@ delete_user <- function() {
   
   emailAccounts_toBeDeleted <- unlist(intersect(unlist(possible_emails_acountsToBeDeleted_list), unlist(company_allUsers_emails_withoutAIUser)))
   
+  if (length(emailAccounts_toBeDeleted) == 0) {
+    cat("\n")
+    message("No user account will be deleted.")
+    cat("\n")
+
+    stop("Deleting user accounts terminated.")
+  }
+  else {
+    cat("\n")
+    message("The following user accounts will be deteled:")
+    print(emailAccounts_toBeDeleted)
+   
+    answer <- tolower(
+      readline("Do you want to continue to delete your account? (yes/no): ")
+    )
+   
+    while (!answer %in% c("yes", "no")) {
+      answer <- tolower(
+        readline("Please enter yes or no: ")
+      )
+    }
+
+    if (answer == "no") {
+      stop("The deletion of user accounts is stopped/interrupted.")
+    }
+  }
+  
+  
   # is current user email (with admin role) also availabel in emailAccounts_toBeDeleted
   currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted
   
@@ -144,7 +172,6 @@ delete_user <- function() {
     answer <- tolower(
       readline("Do you want to continue to delete your account? (yes/no): ")
     )
-    
     while (!answer %in% c("yes", "no")) {
       answer <- tolower(
         readline("Please enter yes or no: ")
