@@ -6,6 +6,7 @@
 #' Sign into Vedaly from R
 #'
 #' @param email User email
+#' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
 delete_user <- function() {
