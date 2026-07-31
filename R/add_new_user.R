@@ -18,10 +18,11 @@ add_new_user <- function(
     new_user_email,
     new_user_first_name,
     new_user_last_name,
-    organization_name,
-    company_roles,
-    admin_email) {
+    company_roles) {
 
+  auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
+  
+  admin_email <- auth_config$email
   
   allowed_roles = list("admin", "user")
 
@@ -65,7 +66,6 @@ add_new_user <- function(
       email = new_user_email,
       first_name = new_user_first_name,
       last_name = new_user_last_name,
-      organization_name = organization_name,
       admin_email = admin_email
     )
   )
