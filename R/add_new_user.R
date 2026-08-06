@@ -8,9 +8,7 @@
 #' @param new_user_email The email address of the user.
 #' @param new_user_first_name First (given) name of the user.
 #' @param new_user_last_name Last (family) name of the user.
-#' @param organization_name Organization or affiliation of the user.
-#' @param company_roles users' company's
-#' @param admin_email Already existing admin_email address of the company
+#' @param new_user_company_roles users' company's
 #'
 #' @return Invisibly returns `TRUE` if the request was successful.
 #' @export
@@ -18,33 +16,32 @@ add_new_user <- function(
     new_user_email,
     new_user_first_name,
     new_user_last_name,
-    company_roles) {
+    new_user_company_roles){
 
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
   
   admin_email <- auth_config$email
   
-  allowed_roles = list("admin", "user")
+  # currently according the database schema (table "companies")
+  # only one user can have "admin" privileges/company_roles
+  # (the generation of this first user is started by calling the vedaly frontend
+  #  "vedaly/R/sign_up")
+  allowed_roles = list("user")
 
-  company_roles_isList = is.list(company_roles)
+  company_roles_isList = is.list(new_user_company_roles)
   
   if (company_roles_isList == FALSE) {
     cat("\n")
-    message("company_roles must be a list")
+    message("new_user_company_roles must be a list")
     cat("\n")
-    stop("company_roles must be a list")
+    stop("new_user_company_roles must be a list")
   }
   
-  for (role in company_roles) {
+  for (role in new_user_company_roles) {
     if (!(role %in% allowed_roles)) {
-      print("hier")
       stop("Invalid role: ", role, "; allowed roles are only: ", paste(unlist(allowed_roles), collapse=" "), " given as list")
     }
   }
-  
-  # stop("halt")
-
-  print(admin_email)
   
   if (!requireNamespace("httr", quietly = TRUE)) {
     stop("Please install the 'httr' package.")
@@ -63,9 +60,10 @@ add_new_user <- function(
     url = endpoint,
     encode = "json",
     body = list(
-      email = new_user_email,
+      user_email = new_user_email,
       first_name = new_user_first_name,
       last_name = new_user_last_name,
+      company_roles = new_user_company_roles,
       admin_email = admin_email
     )
   )
@@ -89,8 +87,4 @@ add_new_user <- function(
       stop(content$message)
     }
   }
-  
-  ######
-  
-  message("This function is under development. Email us to info@vedaly.io to let us know you need it")
 }
