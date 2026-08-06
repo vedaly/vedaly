@@ -5,23 +5,22 @@
 
 #' Sign into Vedaly from R
 #'
-#' @param email User email
+#' @param emailAccounts_toBeDeleted email accounts (as list) which shall be deleted
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-delete_user <- function() {
-
-  # csv file with header and user accounts/emails to
-  # be delete (only emails belonging to the company
-  # of the current admin can be delete)
-  fileWithEmails_toBedeleted = "/home/shenz/vedaly/accounts/emailAdressAcounts_toBeDeleted.csv"
+delete_user <- function(emailAccounts_toBeDeleted) {
   
-  possible_emails_acountsToBeDeleted_list <- as.list(read.delim(fileWithEmails_toBedeleted, header=TRUE, sep=",")[[1]])
+  counts_emailAccounts_toDeleted = length(emailAccounts_toBeDeleted)
+                                          
+  print(counts_emailAccounts_toDeleted) 
+  
+  stop("halten_1")
   
   gql_api_url = "https://graphql-dev.omicschart.com/v1/graphql"
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
-
+  
   # current user email address
   email <- auth_config$email
   email_asList <- list(email = email)
@@ -116,7 +115,7 @@ delete_user <- function() {
   hasAdminRole <- any(sapply(company_currentUser_roles, function(x) x == "admin"))
   
   if (hasAdminRole == FALSE) {
-    message("You don't have the persmission to delete user accounts.")
+    message("You don't have the permission to delete user accounts.")
     message("Please contact admin in your organization.")
     stop("Deletion of user account(s) has been interrupted.")
   }
@@ -129,9 +128,9 @@ delete_user <- function() {
     !grepl("-ai@", unlist(company_allUsers_emails))
   ]
   
-  emailAccounts_toBeDeleted <- unlist(intersect(unlist(possible_emails_acountsToBeDeleted_list), unlist(company_allUsers_emails_withoutAIUser)))
+  emailAccounts_toBeDeleted_asVector <- unlist(intersect(unlist(emailAccounts_toBeDeleted), unlist(company_allUsers_emails_withoutAIUser)))
   
-  if (length(emailAccounts_toBeDeleted) == 0) {
+  if (length(emailAccounts_toBeDeleted_asVector) == 0) {
     cat("\n")
     message("No user account will be deleted.")
     cat("\n")
@@ -141,7 +140,7 @@ delete_user <- function() {
   else {
     cat("\n")
     message("The following user accounts will be deteled:")
-    print(emailAccounts_toBeDeleted)
+    print(emailAccounts_toBeDeleted_asVector)
    
     answer <- tolower(
       readline("Do you want to continue to delete your account? (yes/no): ")
@@ -160,7 +159,9 @@ delete_user <- function() {
   
   
   # is current user email (with admin role) also availabel in emailAccounts_toBeDeleted
-  currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted
+  currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted_asVector
+  
+
   
   users_count = length(company_allUsers_emails_withoutAIUser)
   
@@ -189,6 +190,9 @@ delete_user <- function() {
       stop("Account deletion aborted")
       
     }
+  } else if (users_count > 1 && currentAdminAccount_inAccounts_toBeDeleted) {}
+    
+     ## has to be extended, 
   }
   
   #--- start to delete user account with email address 'email'
@@ -196,7 +200,7 @@ delete_user <- function() {
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
   
-  for (emailAccount in emailAccounts_toBeDeleted) {
+  for (emailAccount in emailAccounts_toBeDeleted_asVector) {
 
   # response <- httr::POST(
   #   url = endpoint,
