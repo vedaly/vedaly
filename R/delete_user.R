@@ -11,11 +11,14 @@
 #' @export
 delete_user <- function(emailAccounts_toBeDeleted) {
   
-  counts_emailAccounts_toDeleted = length(emailAccounts_toBeDeleted)
-                                          
-  print(counts_emailAccounts_toDeleted) 
   
-  stop("halten_1")
+  #############################
+ 
+ 
+  
+  #######################
+  # Ende
+  #######################
   
   gql_api_url = "https://graphql-dev.omicschart.com/v1/graphql"
   
@@ -23,8 +26,9 @@ delete_user <- function(emailAccounts_toBeDeleted) {
   
   # current user email address
   email <- auth_config$email
+  email_admin <- email
   email_asList <- list(email = email)
-
+  
   # get the company id of the current user
   get_user_companyId_query <- "
     query myQuery($email: String!) {
@@ -35,7 +39,7 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       }
     }
   "
-
+  
   response_companyId <- httr::POST(
     url = gql_api_url,
     encode = "json",
@@ -48,7 +52,7 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       `Content-Type` = "application/json"
     )
   )
-
+  
   result_companyId <- httr::content(response_companyId, as = "parsed", encoding = "UTF-8")
   
   company_id <- result_companyId$data$preon_op$users[[1]]$company_id
@@ -77,7 +81,7 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       `Content-Type` = "application/json"
     )
   )
- 
+  
   result_allUsers_emails <- httr::content(response_allUsers_emails, as = "parsed", encoding = "UTF-8")
   
   company_allUsers_emails <- lapply(result_allUsers_emails$data$preon_op$users, function(x) x$email)
@@ -157,17 +161,19 @@ delete_user <- function(emailAccounts_toBeDeleted) {
     }
   }
   
-  
-  # is current user email (with admin role) also availabel in emailAccounts_toBeDeleted
+  # is current user email (with admin role) also available in emailAccounts_toBeDeleted_asVector
   currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted_asVector
-  
-
   
   users_count = length(company_allUsers_emails_withoutAIUser)
   
+  # hier debuggen
+  # users_count = 1
+  
+  user_gettingAdminPrivileges <- "notInUse"
+  
   # if users_count == 1: only 1 (real) user belong to the company
   if (users_count == 1 && currentAdminAccount_inAccounts_toBeDeleted) {
-    message("You're the only user of your company.")
+    message("You're the only user of your company (and with admin privilges.")
     message("If you continue not only your user data, but")
     message("all data of your company will be deleted")
     
@@ -178,6 +184,7 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       answer <- tolower(
         readline("Please enter yes or no: ")
       )
+      answer <- trimws(answer)
     }
     
     if (answer == "yes") {
@@ -190,10 +197,30 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       stop("Account deletion aborted")
       
     }
-  } else if (users_count > 1 && currentAdminAccount_inAccounts_toBeDeleted) {}
+  } else if (users_count > 1 && currentAdminAccount_inAccounts_toBeDeleted) {
+
+    combined_information <- FALSE
     
-     ## has to be extended, 
-  }
+    while (!combined_information) {
+    
+      message("The 2 following conditions must be fullfilled:")
+      message("Please assign the admin privileges to an already existing user of your company.")
+      message("This user account doesn't be in the list to be deleted.")
+      
+      user_gettingAdminPrivileges <- readline("Which user shall take over the admin privileges?:")
+      user_gettingAdminPrivileges <- trimws(user_gettingAdminPrivileges)
+    
+      # check if assigned user_gettingAdminPrivileges exists already and is not one of the users
+      # who shall be deleted
+    
+      is_newAdminUser_inExistingUserAccounts <- user_gettingAdminPrivileges %in% company_allUsers_emails_withoutAIUser
+    
+      is_newAdminUser_notInUserAccountsToBeDeleted <- (!user_gettingAdminPrivileges %in% emailAccounts_toBeDeleted_asVector)
+    
+      combined_information = is_newAdminUser_inExistingUserAccounts && is_newAdminUser_notInUserAccountsToBeDeleted
+    }
+    
+  } else if (users_count > 1 && !(currentAdminAccount_inAccounts_toBeDeleted)) {}
   
   #--- start to delete user account with email address 'email'
   
@@ -201,39 +228,33 @@ delete_user <- function(emailAccounts_toBeDeleted) {
   endpoint <- paste0(api_url, "/userDelete")
   
   for (emailAccount in emailAccounts_toBeDeleted_asVector) {
-
-  # response <- httr::POST(
-  #   url = endpoint,
-  #   encode = "json",
-  #   body = list(email = email, emailAccount = emailAccount, users_count = users_count, company_id = company_id)
-  # )
-  # 
-  #  For security reasons, i.e., prevent company_id source code manipulation on client side:
-  #  the admin company_id and for each email account the company_id will be determined on the backend
-  #  => Only if they are identical the user email account will be deleted on the backend
-  response <- httr::POST(
-    url = endpoint,
-    encode = "json",
-    body = list(email = email, emailAccount = emailAccount, users_count = users_count)
-  )
+    
+    #  For security reasons, i.e., prevent company_id source code manipulation on client side:
+    #  the admin company_id and for each email account the company_id will be determined on the backend
+    #  => Only if they are identical the user email account will be deleted on the backend
+      response <- httr::POST(
+        url = endpoint,
+        encode = "json",
+        body = list(email = email, emailAccount = emailAccount, users_count = users_count, user_gettingAdminPrivileges = user_gettingAdminPrivileges)
+      )
   
-  if (httr::http_error(response)) {
-    msg <- tryCatch({
-      httr::content(response, as = "text", encoding = "UTF-8")
-    }, error = function(e) {
-      response$status_code
-    })
-    stop("Deleting user failed: ", msg)
-  }
+    if (httr::http_error(response)) {
+      msg <- tryCatch({
+        httr::content(response, as = "text", encoding = "UTF-8")
+      }, error = function(e) {
+        response$status_code
+      })
+      stop("Deleting user failed: ", msg)
+    }
   
-  content <- jsonlite::fromJSON(httr::content(response))
+    content <- jsonlite::fromJSON(httr::content(response))
   
-  if (content$success) {
-    message(content$message)
-  } else {
-    if (!content$success) {
-      stop(content$message)
+    if (content$success) {
+      message(content$message)
+    } else {
+      if (!content$success) {
+        stop(content$message)
+      }
     }
   }
-}
 }
