@@ -5,20 +5,11 @@
 
 #' Sign into Vedaly from R
 #'
-#' @param emailAccounts_toBeDeleted email accounts (as list) which shall be deleted
+#' @param emailAccount_toBeDeleted email accounts (as list) which shall be deleted
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-delete_user <- function(emailAccounts_toBeDeleted) {
-  
-  
-  #############################
- 
- 
-  
-  #######################
-  # Ende
-  #######################
+delete_user <- function(emailAccount_toBeDeleted) {
   
   gql_api_url = "https://graphql-dev.omicschart.com/v1/graphql"
   
@@ -52,6 +43,7 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       `Content-Type` = "application/json"
     )
   )
+  
   
   result_companyId <- httr::content(response_companyId, as = "parsed", encoding = "UTF-8")
   
@@ -115,13 +107,13 @@ delete_user <- function(emailAccounts_toBeDeleted) {
   result_currentUser_companyRoles <- httr::content(response_currentUser_companyRoles, as = "parsed", encoding = "UTF-8")
   
   company_currentUser_roles <- result_currentUser_companyRoles$data$preon_op$users[[1]]$company_roles
-  
+
   hasAdminRole <- any(sapply(company_currentUser_roles, function(x) x == "admin"))
-  
+
   if (hasAdminRole == FALSE) {
     message("You don't have the permission to delete user accounts.")
     message("Please contact admin in your organization.")
-    stop("Deletion of user account(s) has been interrupted.")
+    stop("Deletion of user account has been interrupted.")
   }
   
   #---
@@ -132,22 +124,22 @@ delete_user <- function(emailAccounts_toBeDeleted) {
     !grepl("-ai@", unlist(company_allUsers_emails))
   ]
   
-  emailAccounts_toBeDeleted_asVector <- unlist(intersect(unlist(emailAccounts_toBeDeleted), unlist(company_allUsers_emails_withoutAIUser)))
+  emailAccount_toBeDeleted <- unlist(intersect(unlist(emailAccount_toBeDeleted), unlist(company_allUsers_emails_withoutAIUser)))
   
-  if (length(emailAccounts_toBeDeleted_asVector) == 0) {
+  if (length(emailAccount_toBeDeleted) == 0) {
     cat("\n")
     message("No user account will be deleted.")
     cat("\n")
 
-    stop("Deleting user accounts terminated.")
+    stop("Deleting user account terminated.")
   }
   else {
     cat("\n")
-    message("The following user accounts will be deteled:")
-    print(emailAccounts_toBeDeleted_asVector)
+    message("The following user account will be deteled:")
+    print(emailAccount_toBeDeleted)
    
     answer <- tolower(
-      readline("Do you want to continue to delete your account? (yes/no): ")
+      readline("Do you want to continue to delete this account? (yes/no): ")
     )
    
     while (!answer %in% c("yes", "no")) {
@@ -157,25 +149,23 @@ delete_user <- function(emailAccounts_toBeDeleted) {
     }
 
     if (answer == "no") {
-      stop("The deletion of user accounts is stopped/interrupted.")
+      stop("The deletion of user account is stopped/interrupted.")
     }
   }
   
-  # is current user email (with admin role) also available in emailAccounts_toBeDeleted_asVector
-  currentAdminAccount_inAccounts_toBeDeleted = email %in% emailAccounts_toBeDeleted_asVector
+  
+  # is current user email (with admin role) equals the emailAccount_toBeDeleted
+  currentAdminAccount_inAccount_toBeDeleted = email %in% emailAccount_toBeDeleted
   
   users_count = length(company_allUsers_emails_withoutAIUser)
   
-  # hier debuggen
-  # users_count = 1
-  
   user_gettingAdminPrivileges <- "notInUse"
-  
+
   # if users_count == 1: only 1 (real) user belong to the company
-  if (users_count == 1 && currentAdminAccount_inAccounts_toBeDeleted) {
+  if (users_count == 1 && currentAdminAccount_inAccount_toBeDeleted) {
     message("You're the only user of your company (and with admin privilges.")
     message("If you continue not only your user data, but")
-    message("all data of your company will be deleted")
+    message("all data of your company will be deleted.")
     
     answer <- tolower(
       readline("Do you want to continue to delete your account? (yes/no): ")
@@ -197,15 +187,15 @@ delete_user <- function(emailAccounts_toBeDeleted) {
       stop("Account deletion aborted")
       
     }
-  } else if (users_count > 1 && currentAdminAccount_inAccounts_toBeDeleted) {
+  } else if (users_count > 1 && currentAdminAccount_inAccount_toBeDeleted) {
 
     combined_information <- FALSE
     
     while (!combined_information) {
     
       message("The 2 following conditions must be fullfilled:")
-      message("Please assign the admin privileges to an already existing user of your company.")
-      message("This user account doesn't be in the list to be deleted.")
+      message("1.) Please assign the admin privileges to an already existing user of your company.")
+      message("2.) This user account doesn't be equal the email account to be deleted.")
       
       user_gettingAdminPrivileges <- readline("Which user shall take over the admin privileges?:")
       user_gettingAdminPrivileges <- trimws(user_gettingAdminPrivileges)
@@ -215,46 +205,46 @@ delete_user <- function(emailAccounts_toBeDeleted) {
     
       is_newAdminUser_inExistingUserAccounts <- user_gettingAdminPrivileges %in% company_allUsers_emails_withoutAIUser
     
-      is_newAdminUser_notInUserAccountsToBeDeleted <- (!user_gettingAdminPrivileges %in% emailAccounts_toBeDeleted_asVector)
+      is_newAdminUser_notUserAccountToBeDeleted <- (!user_gettingAdminPrivileges %in% emailAccount_toBeDeleted)
     
-      combined_information = is_newAdminUser_inExistingUserAccounts && is_newAdminUser_notInUserAccountsToBeDeleted
+      combined_information = is_newAdminUser_inExistingUserAccounts && is_newAdminUser_notUserAccountToBeDeleted
     }
     
-  } else if (users_count > 1 && !(currentAdminAccount_inAccounts_toBeDeleted)) {}
-  
+  } else if (users_count > 1 && !(currentAdminAccount_inAccount_toBeDeleted)) {}
+
   #--- start to delete user account with email address 'email'
   
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/userDelete")
   
-  for (emailAccount in emailAccounts_toBeDeleted_asVector) {
-    
-    #  For security reasons, i.e., prevent company_id source code manipulation on client side:
-    #  the admin company_id and for each email account the company_id will be determined on the backend
-    #  => Only if they are identical the user email account will be deleted on the backend
-      response <- httr::POST(
-        url = endpoint,
-        encode = "json",
-        body = list(email = email, emailAccount = emailAccount, users_count = users_count, user_gettingAdminPrivileges = user_gettingAdminPrivileges)
-      )
+  #  For security reasons, i.e., prevent company_id source code manipulation on client side:
+  #  the admin company_id and for each email account the company_id will be determined on the backend
+  #  => Only if they are identical the user email account will be deleted on the backend
+  response <- httr::POST(
+    url = endpoint,
+    encode = "json",
+    body = list(email = email, emailAccount = emailAccount_toBeDeleted, users_count = users_count, user_gettingAdminPrivileges = user_gettingAdminPrivileges)
+  )
   
-    if (httr::http_error(response)) {
-      msg <- tryCatch({
-        httr::content(response, as = "text", encoding = "UTF-8")
-      }, error = function(e) {
-        response$status_code
-      })
-      stop("Deleting user failed: ", msg)
-    }
+  if (httr::http_error(response)) {
+    msg <- tryCatch({
+      httr::content(response, as = "text", encoding = "UTF-8")
+    }, error = function(e) {
+      response$status_code
+    })
+    stop("Deleting user failed: ", msg)
+  }
   
-    content <- jsonlite::fromJSON(httr::content(response))
+  content <- jsonlite::fromJSON(httr::content(response))
   
-    if (content$success) {
-      message(content$message)
-    } else {
-      if (!content$success) {
-        stop(content$message)
-      }
+  if (content$success) {
+    message(content$message)
+  } else {
+    if (!content$success) {
+      stop(content$message)
     }
   }
+  message("")
+  message("bis zum Ende")
+  message("")
 }
