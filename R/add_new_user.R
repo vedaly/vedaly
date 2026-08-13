@@ -26,7 +26,7 @@ add_new_user <- function(
   # only one user can have "admin" privileges/company_roles
   # (the generation of this first user is started by calling the vedaly frontend
   #  "vedaly/R/sign_up")
-  allowed_roles = list("user")
+  allowed_roles = list("admin", "user")
 
   company_roles_isList = is.list(new_user_company_roles)
   
