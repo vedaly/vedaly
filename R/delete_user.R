@@ -118,6 +118,62 @@ delete_user <- function(emailAccount_toBeDeleted) {
   
   #---
   
+  # get all users and their roles
+  
+  get_allUsers_roles_companyId_query <- "
+    query myQuery($company_id: Int!) {
+      preon_op {
+        users(where: {company_id: {_eq: $company_id}}) {
+          id
+          company_roles
+        }
+      }
+    }
+  "
+  
+  response_allUsers_roles <- httr::POST(
+    url = gql_api_url,
+    encode = "json",
+    body = list(
+      query = get_allUsers_roles_companyId_query,
+      variables = list(company_id = company_id)
+    ),
+    httr::add_headers(
+      Authorization = paste("Bearer", auth_config$id_token),
+      `Content-Type` = "application/json"
+    )
+  )
+  
+  result_allUsers_roles <- httr::content(response_allUsers_roles, as = "parsed")
+  
+  
+  allUsers_roles <- do.call(
+    rbind,
+    lapply(
+      result_allUsers_roles$data$preon_op$users,
+      function(user) {
+        
+        roles <- if (is.null(user$company_roles)) {
+          character(0)
+        } else {
+          unlist(user$company_roles)
+        }
+        
+        data.frame(
+          id = user$id,
+          company_roles = paste(roles, collapse = ","),
+          stringsAsFactors = FALSE
+        )
+      }
+    )
+  )
+  
+  
+  roles <- allUsers_roles$company_roles
+  
+  # how often does the pattern "admin" occurs in roles
+  admin_counts <- sum(grepl("admin", roles))
+  
   # determing now the counts of user email addresses belonging to the company
   # without ai
   company_allUsers_emails_withoutAIUser <- company_allUsers_emails[
@@ -161,8 +217,9 @@ delete_user <- function(emailAccount_toBeDeleted) {
   
   user_gettingAdminPrivileges <- "notInUse"
 
-  # if users_count == 1: only 1 (real) user belong to the company
+  # if users_count == 1: only 1 (real) user belong to the company, and it must have admin privileges
   if (users_count == 1 && currentAdminAccount_inAccount_toBeDeleted) {
+    
     message("You're the only user of your company (and with admin privilges.")
     message("If you continue not only your user data, but")
     message("all data of your company will be deleted.")
@@ -187,7 +244,7 @@ delete_user <- function(emailAccount_toBeDeleted) {
       stop("Account deletion aborted")
       
     }
-  } else if (users_count > 1 && currentAdminAccount_inAccount_toBeDeleted) {
+  } else if (users_count > 1 && currentAdminAccount_inAccount_toBeDeleted && admin_counts == 1) {
 
     combined_information <- FALSE
     
@@ -195,7 +252,7 @@ delete_user <- function(emailAccount_toBeDeleted) {
     
       message("The 2 following conditions must be fullfilled:")
       message("1.) Please assign the admin privileges to an already existing user of your company.")
-      message("2.) This user account doesn't be equal the email account to be deleted.")
+      message("2.) This user account must not be equal the email account to be deleted.")
       
       user_gettingAdminPrivileges <- readline("Which user shall take over the admin privileges?:")
       user_gettingAdminPrivileges <- trimws(user_gettingAdminPrivileges)
@@ -209,8 +266,15 @@ delete_user <- function(emailAccount_toBeDeleted) {
     
       combined_information = is_newAdminUser_inExistingUserAccounts && is_newAdminUser_notUserAccountToBeDeleted
     }
+  } else if (users_count > 1 && currentAdminAccount_inAccount_toBeDeleted && admin_counts > 1) {
     
-  } else if (users_count > 1 && !(currentAdminAccount_inAccount_toBeDeleted)) {}
+    # nothing to be done: when the current user with admin privileges is deleted, there is at least still one
+    # user available who has admin privileges
+    
+  } else if (users_count > 1 && !(currentAdminAccount_inAccount_toBeDeleted) ) {
+    
+    # nothing to be done: the current user with admin privileges is not deleted
+  }
 
   #--- start to delete user account with email address 'email'
   
