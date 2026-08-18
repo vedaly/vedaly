@@ -32,9 +32,9 @@ add_new_user <- function(
   
   if (company_roles_isList == FALSE) {
     cat("\n")
-    message("new_user_company_roles must be a list")
+    message("new_company_roles must be cast to a list")
     cat("\n")
-    stop("new_user_company_roles must be a list")
+    stop("new_user_company_roles must be cast to a list")
   }
   
   for (role in new_user_company_roles) {
