@@ -244,7 +244,4 @@ delete_user <- function(emailAccount_toBeDeleted) {
       stop(content$message)
     }
   }
-  message("")
-  message("bis zum Ende")
-  message("")
 }
