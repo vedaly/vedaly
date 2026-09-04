@@ -9,7 +9,7 @@
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-add_project <- function(projectName) {
+add_project <- function(projectName, description = NULL) {
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
  
@@ -24,28 +24,27 @@ add_project <- function(projectName) {
     encode = "json",
     body = list(
       email = email,
-      projectName = projectName
+      projectName = projectName,
+      description = description
     )
   )
   
-  # debugging:
+  if (httr::http_error(response)) {
+    msg <- tryCatch({
+      httr::content(response, as = "text", encoding = "UTF-8")
+    }, error = function(e) {
+      response$status_code
+    })
+    stop("Creating project failed: ", msg)
+  }
   
-  cat("\nHTTP status:\n")
-  print(httr::status_code(response))
+  content <- jsonlite::fromJSON(httr::content(response))
   
-  cat("\nHTTP response:\n")
-  print(httr::content(response, as = "text"))
-  
-  # debugging ended:
-
-  cat("\n")
-  cat("------------------")
-  cat("\n")
-  
-  cat("\n")
-  cat("back to frontend:")
-  cat("\n")
-  cat("email:")
-  print(email)
-  cat("\n")
+  if (content$success) {
+    message(content$message)
+  } else {
+    if (!content$success) {
+      stop(content$message)
+    }
+  }
 }
