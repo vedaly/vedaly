@@ -28,12 +28,12 @@ add_new_user <- function(
   #  "vedaly/R/sign_up")
   allowed_roles = list("admin", "user")
 
-  company_roles_isList = is.list(new_user_company_roles)
+  company_roles_is_list = is.list(new_user_company_roles)
   
-  if (company_roles_isList == FALSE) {
-    cat("\n")
+  if (company_roles_is_list == FALSE) {
+    message("")
     message("new_company_roles must be a list")
-    cat("\n")
+    message("")
     stop("new_user_company_roles must be a list")
   }
   
