@@ -5,11 +5,11 @@
 
 #' Add new project to Vedaly
 #'
-#' @param projectName (to be created)
+#' @param project_name (to be created)
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-add_project <- function(projectName, description = NULL) {
+add_project <- function(project_name, description = NULL) {
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
  
@@ -24,7 +24,7 @@ add_project <- function(projectName, description = NULL) {
     encode = "json",
     body = list(
       email = email,
-      projectName = projectName,
+      project_name = project_name,
       description = description
     )
   )
