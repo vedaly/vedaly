@@ -5,12 +5,12 @@
 
 #' Add new project to Vedaly
 #'
-#' @param userEmail_to_beAssigned  [== user email address] (assigned to project)
-#' @param projectName
+#' @param user_email_to_be_resigned  [== user email address] (resigned from project)
+#' @param project_name
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-assign_user_toProject <- function(userEmail_to_beAssigned, projectName) {
+resign_user_from_project <- function(user_email_to_be_resigned, project_name) {
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
  
@@ -18,15 +18,15 @@ assign_user_toProject <- function(userEmail_to_beAssigned, projectName) {
   email <- auth_config$email
   
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
-  endpoint <- paste0(api_url, "/assignUserToProject")
+  endpoint <- paste0(api_url, "/resignUserFromProject")
   
   response <- httr::POST(
     url = endpoint,
     encode = "json",
     body = list(
       email = email,
-      userEmail_to_beAssigned = userEmail_to_beAssigned ,
-      projectName = projectName
+      user_email_to_be_resigned = user_email_to_be_resigned ,
+      project_name = project_name
     )
   )
   
@@ -36,7 +36,7 @@ assign_user_toProject <- function(userEmail_to_beAssigned, projectName) {
     }, error = function(e) {
       response$status_code
     })
-    stop("Assigning user failed: ", msg)
+    stop("Resigning user failed: ", msg)
   }
   
   content <- jsonlite::fromJSON(httr::content(response))
