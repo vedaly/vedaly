@@ -16,13 +16,6 @@ delete_project <- function(project_name) {
   # current user's email address
   email <- auth_config$email
   
-  cat("\n")
-  print(project_name)
-  print(email)
-  cat("\n")
-  message("Anfang frontend")
-  message()
-  
   api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
   endpoint <- paste0(api_url, "/deleteProject")
   
@@ -35,12 +28,6 @@ delete_project <- function(project_name) {
       project_name = project_name
     )
   )
-  
-  message()
-  message("zurück in frontend")
-  message()
-  
-  stop("Ende frontend")
   
   if (httr::http_error(response)) {
     msg <- tryCatch({
@@ -60,9 +47,6 @@ delete_project <- function(project_name) {
       stop(content$message)
     }
   }
-  
-  message()
-  message("done")
-  message()
 
 }
+
