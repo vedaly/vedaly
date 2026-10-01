@@ -6,11 +6,21 @@
 #' Sign into Vedaly from R
 #'
 #' @param email_account_to_be_deleted email accounts (as list) which shall be deleted
-#' @param gql_api_url  url to api of the graphQL database
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-delete_user <- function(email_account_to_be_deleted, gql_api_url) {
+delete_user <- function(email_account_to_be_deleted) {
+  
+  vedaly.gql_api_url <- getOption(
+    "vedaly.gql_api_url",
+    default = "https://graphql-prod.omicschart.com/v1/graphql"
+  )
+  
+  message()
+  print(vedaly.gql_api_url)
+  message()
+  
+  stop("halt")
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
   
@@ -31,7 +41,7 @@ delete_user <- function(email_account_to_be_deleted, gql_api_url) {
   "
   
   response_company_id <- httr::POST(
-    url = gql_api_url,
+    url = vedaly.gql_api_url,
     encode = "json",
     body = list(
       query = get_user_company_id_query,
@@ -61,7 +71,7 @@ delete_user <- function(email_account_to_be_deleted, gql_api_url) {
   "
   
   response_all_users_emails <- httr::POST(
-    url = gql_api_url,
+    url = vedaly.gql_api_url,
     encode = "json",
     body = list(
       query = get_users_emails_query,
@@ -91,7 +101,7 @@ delete_user <- function(email_account_to_be_deleted, gql_api_url) {
   "
   
   response_current_user_company_roles <- httr::POST(
-    url = gql_api_url,
+    url = vedaly.gql_api_url,
     encode = "json",
     body = list(
       query = get_current_user_company_roles_query,
@@ -131,7 +141,7 @@ delete_user <- function(email_account_to_be_deleted, gql_api_url) {
   "
   
   response_all_users_roles <- httr::POST(
-    url = gql_api_url,
+    url = vedaly.gql_api_url,
     encode = "json",
     body = list(
       query = get_all_users_roles_company_id_query,
