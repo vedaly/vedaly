@@ -6,12 +6,11 @@
 #' Sign into Vedaly from R
 #'
 #' @param email_account_to_be_deleted email accounts (as list) which shall be deleted
+#' @param gql_api_url  url to api of the graphQL database
 #' 
 #' @return Invisibly returns `TRUE` if request was successful.
 #' @export
-delete_user <- function(email_account_to_be_deleted) {
-  
-  gql_api_url = "https://graphql-dev.omicschart.com/v1/graphql"
+delete_user <- function(email_account_to_be_deleted, gql_api_url) {
   
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
   
