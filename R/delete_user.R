@@ -16,12 +16,6 @@ delete_user <- function(email_account_to_be_deleted) {
     default = "https://graphql-prod.omicschart.com/v1/graphql"
   )
   
-  message()
-  print(vedaly.gql_api_url)
-  message()
-  
-  stop("halt")
-  
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
   
   # current user email address
