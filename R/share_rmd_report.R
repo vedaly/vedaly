@@ -5,32 +5,103 @@
 
 #' UNDER DEVELOPMENT Share HTML and PDF outputs of rmd to Vedaly
 #'
-#' @param rmd_file path to .rmd rmarkdown document
+#' @param rmd_file Path to .rmd rmarkdown document == directory containing exactl one PDF and one HTML report
+#' @param prefix_s3 Parent directory of the s3 bucket
 #' @param project Project name where the report should be shared to. By default is it shared in active project (if set) or in personal workspace
 #' @param title Report title. Used to display report in the list of reports. By default title from the header is used
-#' @param prefix_s3  parent directory of the s3 bucket
 #'
 #' @return UUID of the report
 #' @export
 share_rmd_report <- function(rmd_file, prefix_s3, project = "My Workspace", title = NULL) {
   
-  api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
+  # API emdpoint
+  api_url <- getOption(
+    "vedaly.api_url",
+    default = "https://api.omicschart.com"
+  )
   
   vedaly.gql_api_url <- getOption(
     "vedaly.gql_api_url",
     default = "https://graphql-prod.omicschart.com/v1/graphql"
   )
   
+  # remove possible trailing white space
+  api_url <- sub("/+$", "", api_url)
+  prefix_s3 <- sub("/+$", "", prefix_s3)
+  
+  # validate the S3 bucket
+  if (!grepl("^s3://[^/]+$", prefix_s3)) {
+    stop("prefix_s3 must be an S3 bucket root, e.g. s3://preon-dev.iotk")
+  }
+  
+  # validate the report directory
+  if (length(rmd_file) != 1 || !dir.exists(rmd_file)) {
+    stop("rmd_file must point to an existing directory.")
+  }
+  
+  # read the current login session
   auth_config = readRDS(file.path(tools::R_user_dir("vedaly", "config"), "session.rds"))
+  
+  # check if the email address and the necessary tokens are available
+  if (is.null(auth_config$email) ||
+      is.null(auth_config$id_token) ||
+      is.null(auth_config$access_token)) {
+    stop("The saved login session is missing required authentication data.")
+  }
 
   # user who is currently logged in
   email <- auth_config$email
   email_as_list <- list(email = email)
   
   
-  #----
+  # -----------------------------
+  # helper function: send a GraphQL query and validate its response
+  # -----------------------------
   
-  # get the company id and user id of the current user
+  graphql_post <- function(query, variables) {
+    
+    response <- httr::POST(
+      url = vedaly.gql_api_url,
+      encode = "json",
+      body = list(
+        query = query,
+        variables = variables
+      ),
+      httr::add_headers(
+        Authorization = paste("Bearer", auth_config$id_token),
+        `Content-Type` = "application/json"
+      ),
+      httr::timeout(60)
+    )
+    
+    if (httr::http_error(response)) {
+      stop(
+        "GraphQL HTTP request failed: ",
+        httr::content(response, as = "text", encoding = "UTF-8")
+      )
+    }
+    
+    result <- httr::content(
+      response,
+      as = "parsed",
+      encoding = "UTF-8"
+    )
+    
+    if (!is.null(result$errors)) {
+      stop("GraphQL error: ", result$errors[[1]]$message)
+    }
+    
+    # return value
+    return(result)
+  }
+  
+  # -- end of helper function
+  
+  #----------
+  # company id and user id
+  # -------
+  
+  # retrieve the company id and user id of the current user
   get_user_info_query <- "
     query myQuery($email: String!) {
       preon_op {
@@ -42,38 +113,28 @@ share_rmd_report <- function(rmd_file, prefix_s3, project = "My Workspace", titl
     }
   "
   
-  # send the GraphQL request for the user_info
-  response_user_info <- httr::POST(
-    url = vedaly.gql_api_url,
-    encode = "json",
-    body = list(
-      query = get_user_info_query,
-      variables = email_as_list
-    ),
-    httr::add_headers(
-      Authorization = paste("Bearer", auth_config$id_token),
-      `Content-Type` = "application/json"
-    )
-  )  
-  
-  # extract the user_info's response
-  result_user_info <- httr::content(
-    response_user_info,
-    as = "parsed",
-    encoding = "UTF-8"
+  result_user_info <- graphql_post(
+    query = get_user_info_query,
+    variables = list(email = auth_config$email)
   )
-  
-  # get the company id of the current user
-  company_id <- result_user_info$data$preon_op$users[[1]]$company_id
-  company_id_as_list <- list(company_id = company_id)
-  
-  # get the user id of the current user
-  user_id <- result_user_info$data$preon_op$users[[1]]$id
 
+  users <- result_user_info$data$preon_op$users
   
-  # get project id of the current project / the project under consideration
+  if (is.null(users) || length(users) != 1 ||
+      is.null(users[[1]]$company_id) || is.null(users[[1]]$id)) {
+    stop("Could not identify exactly one user with a company id.")
+  }
+  
+  company_id <- users[[1]]$company_id
+  user_id <- users[[1]]$id
+  
+  #-----------
+  # project id
+  #-----------
+  
+  # retrieve the project id of the current project / the project under consideration
   # its user_id and company_id must be given as well:
-  # other user of the same company can own projects too, and 
+  # other users of the same company can own projects too, and 
   # project names in different companies might have the same name
   get_project_info_query <- "
     query myQuery(
@@ -94,53 +155,33 @@ share_rmd_report <- function(rmd_file, prefix_s3, project = "My Workspace", titl
       }
     }
   "
-
-  # prepare the project name and company ID as named GraphQL variables
-  project_name_and_company_id_user_id_as_list <- list(
-    name = project,
-    company_id = company_id,
-    user_id = user_id
-  )
-
-  # send the GraphQL request for the project_info
-  response_project_info <- httr::POST(
-    url = vedaly.gql_api_url,
-    encode = "json",
-    body = list(
-      query = get_project_info_query,
-      variables = project_name_and_company_id_user_id_as_list
-    ),
-    httr::add_headers(
-      Authorization = paste("Bearer", auth_config$id_token),
-      `Content-Type` = "application/json"
+  
+  result_project_info <- graphql_post(
+    query = get_project_info_query,
+    variables = list(
+      name = project,
+      company_id = as.integer(company_id),
+      user_id = as.integer(user_id)
     )
   )
   
-  # extract the project_info's response
-  result_project_info <- httr::content(
-    response_project_info,
-    as = "parsed",
-    encoding = "UTF-8"
-  )
+  projects <- result_project_info$data$preon_op$company_projects
   
-  # check whether a matching project was found
-  if (
-    is.null(result_project_info$data$preon_op$company_projects) ||
-    length(result_project_info$data$preon_op$company_projects) == 0 ||
-    is.null(result_project_info$data$preon_op$company_projects[[1]]$id)
-  ) {
+  if (is.null(projects) || length(projects) != 1 ||
+      is.null(projects[[1]]$id)) {
     stop(
-      "Error: No project found matching the project name, company id, and user id."
+      "Could not identify exactly one project matching the project name, ",
+      "company id, and user id."
     )
   }
-
-  # extract the project id
-  project_id <- result_project_info$data$preon_op$company_projects[[1]]$id
   
-  # now the the report file base names (pdf and html) 
-  # get all pdf and html files in the given directory "rmd_file"
+  project_id <- projects[[1]]$id
   
-  # get all pdf and html files in the given directory
+  #-----------
+  # report files' location
+  #-----------
+  
+  # locate the report PDF and one HTML file
   report_files <- list.files(
     path = rmd_file,
     pattern = "\\.(pdf|html)$",
@@ -148,124 +189,251 @@ share_rmd_report <- function(rmd_file, prefix_s3, project = "My Workspace", titl
     ignore.case = TRUE
   )
   
-  # get the full qualified html filename
-  html_filename <- report_files[
-    grepl("\\.html$", report_files, ignore.case = TRUE)
-  ]
-  
-  # get the full qualified pdf filename
-  pdf_filename <- report_files[
+  pdf_files <- report_files[
     grepl("\\.pdf$", report_files, ignore.case = TRUE)
   ]
   
-  # check if there is exactly one pdf and one html file
-  if (length(pdf_filename) != 1 || length(html_filename) != 1) {
+  html_files <- report_files[
+    grepl("\\.html$", report_files, ignore.case = TRUE)
+  ]
+  
+  # check if there is exactly one PDF and one HTML report file
+  if (length(pdf_files) != 1) {
     stop(
-      "Error: The directory must contain exactly one pdf report file and exactly one html report file."
+      "Expected exactly one PDF report file, but found ",
+      length(pdf_files),
+      "."
     )
   }
   
-  # get basenames of pdf and html:
+  if (length(html_files) != 1) {
+    stop(
+      "Expected exactly one HTML report file, but found ",
+      length(html_files),
+      "."
+    )
+  }
+  
+  pdf_filename <- pdf_files[[1]]
+  html_filename <- html_files[[1]]
+  
+  pdf_filename <- normalizePath(pdf_filename, mustWork = TRUE)
+  html_filename <- normalizePath(html_filename, mustWork = TRUE)
+  
   pdf_basename <- basename(pdf_filename)
   html_basename <- basename(html_filename)
   
-  # relative destinations s3 bucket:
-  relative_s3 <- paste(company_id, user_id, "reports", sep="/")
-  
-  message()
-  message("relatvive_s3")
-  print(relative_s3)
-  
-  pdf_report <- paste(prefix_s3, relative_s3, pdf_basename, sep="/")
-  html_report <- paste(prefix_s3, relative_s3, html_basename, sep="/")
-  
-  
-  # # s3 bucket destination
-  # 
-  # # prefix s3:
-  # prefix_s3 <- "s3://preon-dev.iotk/"
-  # 
-  # print(prefix_s3)
-  # print(pdf_report)
-  # print(html_report)
-  # 
-  # stop("halten_2")
-  
-  ###############
-  
-  ###############
-  
-  
-
-  ###########
-  ###########
-  
-  # stop("halt")
-  
-  message()
-  print("hallo")
-  message()
-  
-  
-  api_url <- getOption("vedaly.api_url", default = "https://api.omicschart.com")
-  
+  #---------------
+  # send both files to Plumber. The backend, not this client function,
+  # performs the AWS S3 uploads.
+  #----------------
   
   endpoint <- paste0(api_url, "/shareReportToPreon")
   
-  message()
-  message(rmd_file)
-  message(project)
-  message()
+  message("Uploading report files to the Vedaly backend...")
+  message("PDF:  ", pdf_basename)
+  message("HTML: ", html_basename)
+  message("Project: ", project)
   
-  message("verlasse frontend")
   
-  message()
+  request_body <- list(
+    pdf_report = httr::upload_file(
+      pdf_filename, type = "application/octet-stream"
+    ),
+    html_report = httr::upload_file(
+      html_filename, type = "application/octet-stream"
+    ),
+    company_id = as.character(company_id),
+    user_id = as.character(user_id),
+    project_id = as.character(project_id),
+    pdf_basename = pdf_basename,
+    html_basename = html_basename,
+    s3_bucket = sub("/+$", "", prefix_s3)
+  )
   
-  # stop("halten_1")
-
-  # response <- httr::POST(
-  #   url = endpoint,
-  #   encode = "json",
-  #   body = list(
-  #     pdf_report_source = pdf_filename_source,
-  #     htmtl_report_source = html_filename_source
-  #     html_report = ,
-  #     ...
-  #   ),
-  #   httr::add_headers(Authorization = paste("Bearer", auth_config$access_token))
-  # )
+  # ------------------
+  #  report files upload
+  # ------------------
+  
+  message("Uploading and sharing reports")
   
   response <- httr::POST(
-    url = paste0(endpoint),
-    body = list(
-      pdf_report = httr::upload_file(pdf_filename),
-      html_report = httr::upload_file(html_filename),
-      company_id = as.character(company_id),
-      user_id = as.character(user_id),
-      project_id = as.character(project_id),
-      pdf_basename = pdf_basename,
-      html_basename = html_basename
-    ),
+    url = endpoint,
+    body = request_body,
     encode = "multipart",
     httr::add_headers(
       Authorization = paste("Bearer", auth_config$access_token)
-    )
+    ),
+    httr::timeout(600)
   )
   
-
-  if (httr::http_error(response)) {
-    msg <- tryCatch({
-      httr::content(response, as = "text", encoding = "UTF-8")
-    }, error = function(e) {
-      response$status_code
-    })
-    stop("Report sharing failed: ", msg)
+  # ------------------------------------------------------------
+  # read backend response as raw data
+  # ------------------------------------------------------------
+  
+  response_raw <- httr::content(
+    response,
+    as = "raw"
+  )
+  
+  response_text <- if (length(response_raw) > 0) {
+    rawToChar(response_raw)
+  } else {
+    ""
   }
-
-  content <- jsonlite::fromJSON(httr::content(response))
-  if (!content$success) stop("Report sharing failed. Try again later.")
-
-  message("Report shared successfully. ", content$message)
-  return(content$uuid)
+  
+  # ------------------------------------------------------------
+  # check HTTP status
+  # ------------------------------------------------------------
+  
+  if (httr::http_error(response)) {
+    
+    backend_message <- if (nzchar(response_text)) {
+      response_text
+    } else {
+      "The backend returned an empty response body."
+    }
+    
+    error_content <- tryCatch(
+      jsonlite::fromJSON(
+        response_text,
+        simplifyVector = FALSE
+      ),
+      error = function(e) NULL
+    )
+    
+    if (is.list(error_content) &&
+        !is.null(error_content$message)) {
+      backend_message <- error_content$message
+    }
+    
+    stop(
+      "Report sharing failed (HTTP ",
+      response$status_code,
+      "): ",
+      backend_message
+    )
+  }
+  
+  # ------------------------------------------------------------
+  # check whether the backend returned a response body
+  # ------------------------------------------------------------
+  
+  if (!nzchar(response_text)) {
+    stop(
+      "The backend returned an empty response body (HTTP ",
+      response$status_code,
+      ")."
+    )
+  }
+  
+  # ------------------------------------------------------------
+  # parse JSON response
+  # ------------------------------------------------------------
+  
+  content <- NULL
+  
+  content <- tryCatch(
+    jsonlite::fromJSON(
+      response_text,
+      simplifyVector = FALSE
+    ),
+    error = function(e) NULL
+  )
+  
+  #----------------------------------------------------------------
+  # validate JSON response
+  #-----------------------------------------------------------------
+  
+  if (is.null(content) || !is.list(content)) {
+    
+    if (httr::http_error(response)) {
+      stop(
+        "Report sharing failed (HTTP ",
+        response$status_code,
+        "): ",
+        if (nzchar(response_text)) {
+          response_text
+        } else {
+          "The backend returned an empty response body."
+        }
+      )
+    }
+    
+    stop(
+      "The backend returned an invalid JSON response: ",
+      response_text
+    )
+  }
+  
+  # ------------------------------------------------------------
+  # check explicit success flag
+  # ------------------------------------------------------------
+  
+  if (!isTRUE(content$success)) {
+    
+    backend_message <- "Report sharing failed."
+    
+    if (!is.null(content$message)) {
+      backend_message <- as.character(content$message)
+    } else if (!is.null(content$error)) {
+      backend_message <- as.character(content$error)
+    }
+    
+    else if (!is.null(content$error)) {
+      backend_message <- as.character(content$error)
+    }
+    
+    stop(
+      "Report sharing failed (HTTP ",
+      response$status_code,
+      "): ",
+      return(backend_message)
+    )
+    
+  }
+  
+  # ------------------------------------------------------------
+  # validate and return report UUID
+  # ------------------------------------------------------------
+  
+  if (is.null(content$uuid) ||
+      length(content$uuid) != 1 ||
+      is.na(content$uuid) ||
+      !nzchar(as.character(content$uuid))) {
+    stop(
+      "The backend reported success, but did not return ",
+      "a valid report UUID."
+    )
+  }
+  
+  report_uuid <- as.character(content$uuid)
+  
+  #-----------------------------------------
+  # handle inconsistent HTTP status
+  #------------------------------------------
+  
+  if (httr::http_error(response)) {
+    
+    warning(
+      "The backend returned HTTP ",
+      response$status_code,
+      " but also reported success and returned a valid UUID. ",
+      "The report upload appears to have succeeded; ",
+      "the HTTP status should be investigated on the backend."
+    )
+    
+  }
+  
+  #--------------------------------
+  # success
+  #-----------------
+  
+  message(
+    "Report shared successfully. UUID: ",
+    report_uuid
+  )
+  
+  return(report_uuid)
 }
-
+ 
